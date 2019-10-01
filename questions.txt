@@ -1,0 +1,112 @@
+
+// Author : Jiachen Wang.  PennID: 49678282
+// Author : Chang Lee.     PennID: 23888214
+
+
+Q1: What did you do to test your implementation and what was each test intended to verify?
+
+// DONE
+h1 ping 10.0.2.2 # h2, this tests ping from h1 to h2
+h1 ping 10.0.3.3 # h3, this tests ping from h1 to h3
+h2 ping 10.0.1.1 # h1, this tests ping from h2 to h1
+h2 ping 10.0.3.3 # h3, this tests ping from h2 to h3
+h3 ping 10.0.1.1 # h1, this tests ping from h3 to h1
+h3 ping 10.0.2.2 # h2, this tests ping from h3 to h2
+We did the above testing to ping between the three hosts. All the commands above
+work properly with zero packets lost. We also use: 
+h1 tshark &
+h2 tshark &
+h3 tshark & 
+These 3 commands utilize wireshark to print out detail information. 
+They help us check that the pings we sent are replied from correct hosts.
+We have also read the log files to trace the working pipeline of our routers, 
+and we found that the routers are working properly as they are supposed to. 
+
+
+Q2: What functionality is missing from the router implementation we asked you to complete?  We mentioned TTLs, but what else?
+
+// DONE 
+   The key functionality that is missing from our router implementation is that it doesn't have any
+routing algorithms to calculate efficient routes. We just pre-program these routes so that 
+we can focus on the actual packet processing. 
+   Also, usually a router should be able to connect two or more networks to form an internetwork.
+However our router can not do this. Our router can only connect to a host or a router itself, rather than networks.
+Because if a router is connected to networks, it needs to be able to select efficient routes. Our router can not do this.
+   Our router doesn't support IPV6. 
+   Our router is not a 'learning' router. The control plane is 100% static. It is not able to learn
+routes, broadcast packets, and update table entries like a learning switch in project1.
+   
+
+
+Q3: Is it possible to arping from one host to another in this network?  Why or why not?
+
+// DONE
+// No, it is not possible. 
+   Arping is a command for testing Layer-2 network connectivity. 
+   Our router is Layer-3, and it is not a learning switch. We just pre-program the routing table.
+   In the control plane, we can see that routes are hard coded, and the destination addresses are all IPV4 addresses.
+   An Arping command uses a MAC address and an IP address as destination addresses. If either the MAC or the IP 
+doesn't match the target's expectations, it may not respond.
+   Because our routing table doesn't support MAC addresses as destination addresses,
+and our router doesn't have 'learning' features like broadcasting unknown packets and updating routing table entries, 
+our router is not able to know where to send the packet to. 
+   
+   
+
+Q4: ARP is a very common protocol that maps from IP->MAC.  Mechanisms for mapping the other direction MAC->IP are much less common.  Why do you think that is?
+
+// DONE
+IP address and MAC address operate on different layers. IP address is assigned dynamically
+to a device on a network, in other words, it may change. The same IP address can be assigned to 
+different devices according to different conditions. However, MAC addresses are unique, they never change.
+As a result, if we map from MAC to IP, it may cause problems. 
+For example, if a device X has MAC address 'macAddr1', and IP address 'IPAddr', and we have a mapping
+macAddr1 -> IPAddr. Then something happens and this IP address is assigned to some other device with macAddr2.
+In this case, if we create a new mapping macAddr2 -> IPAddr, then we will have two MAC addresses mapping to the
+same IP address, which is obviously wrong. As a result, before we want to change the mapping,
+we will have to first look up in the table to find which MAC address is associated with 'IPAddr' first,
+then delete that mapping, then create a new mapping: macAddr2 -> IPAddr. The process is very complex.
+However, in the case of mapping IP addresses to MAC addresses, all we need to do is updating the mapping. 
+We just need to assign this IP address to a new MAC address, which is much simpler.
+
+
+
+Q5: Hybrid routers/switches exist in the real world.  For instance, imagine we have a 3-port L2/3 switch, where ports 1&2 are on the same Ethernet network and port 3 is an uplink to the Internet.  In this case, the switch might have 2 MAC addresses, XX:XX:XX:XX:XX:XX (facing ports 1&2) and YY:YY:YY:YY:YY:YY (facing port 3), and a single IP address Z.Z.Z.Z (facing port 3).
+
+Ports 1&2 would function exactly like a learning switch, but if a frame arrives with dstMac XX:XX:XX:XX:XX:XX, it would kick it up to Layer 3 processing.  Similarly, if packet arrives at port 3, it might broadcast it out ports 1&2.
+
+Briefly sketch out pseudocode for the data plane operation of such a switch.  This doesn't need to be in P4 format.  C++/Python-like logic is fine.
+
+
+// DONE
+// Suppose port 3 is an uplink to the Internet and ports 1&2 are on the same Ethernet network.
+
+Parse Ethernet;
+According to the Ethernet type:
+
+if coming information is Layer3 packet:
+   Parse packet on port 3;
+   if destination IPAddr is in the routing table:
+       Forward the packet as the routing table suggests;
+   elif IPAddr not in the routing table:
+       broadcast the packet to ports 1&2;
+       Ports 1&2 do multicasting as a learning switch does.
+       Ports 1&2 learn where to send the packet.
+       Ports 1&2 forward the packet.
+
+elif: coming information is Layer2 frame:
+   Parse frame on port 1&2;
+   if destination MACAddr is in the forwarding table:
+       Forward the frame as the forwarding table suggests;
+   elif MACAddr not in the routing table:
+       do multicasting as a learning switch does.
+       Ports 1&2 learn where to send the frame.
+       Ports 1&2 forward the frame.
+
+elif: coming information is ARP request:
+   Parse ARP request on port 1&2;
+   if requested IP is 'Z.Z.Z.Z':
+        Issue ARP response;
+   else:
+        Drop the request;
+
